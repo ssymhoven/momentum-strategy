@@ -4,6 +4,7 @@ import seaborn as sns
 from matplotlib.colors import LinearSegmentedColormap
 import dataframe_image as dfi
 
+
 def calculate_momentum_score(z):
     if z > 0:
         return 1 + z
@@ -16,6 +17,10 @@ def calculate_momentum_score(z):
 def get_first_dezil(df, column):
     first_dezil = df[column].quantile(0.9)
     first_dezil_df = df[df[column] >= first_dezil]
+
+    first_dezil_df['weighted_cap'] = first_dezil_df['#mkt_cap'] * first_dezil_df['momentum_score']
+    first_dezil_df['weight'] = first_dezil_df['weighted_cap'] / first_dezil_df['weighted_cap'].sum() * 100
+
     return first_dezil_df
 
 
@@ -45,18 +50,30 @@ def get_universe_data(universe: str) -> pd.DataFrame:
 
 
 def style_universe_with_bars(df: pd.DataFrame, name: str) -> str:
-    df = df[['name', 'gics_sector_name', 'momentum_val', 'momentum_score']].copy()
-    df['momentum_val'] = pd.to_numeric(df['momentum_val'], errors='coerce') * 100
-    df = df.sort_values(by='momentum_score', ascending=False)
+    df = df[['name', 'gics_sector_name', '#mkt_cap', 'momentum_val', 'momentum_score', 'weight']].copy()
 
-    momentum_val_max_abs_value = max(abs(df['momentum_val'].min()), abs(df['momentum_val'].max()))
-    momentum_score_max_abs_value = max(abs(df['momentum_score'].min()), abs(df['momentum_score'].max()))
+    df = df.rename(columns={
+        'name': 'Name',
+        'gics_sector_name': 'Sector',
+        '#mkt_cap': 'Market Cap (Mio.)',
+        'momentum_val': 'Momentum Value',
+        'momentum_score': 'Momentum Score',
+        'weight': 'Weight'
+    })
+
+    df['Momentum Value'] = pd.to_numeric(df['Momentum Value'], errors='coerce') * 100
+    df['Market Cap (Mio.)'] = df['Market Cap (Mio.)'] / 1_000_000
+
+    df = df.sort_values(by='Momentum Score', ascending=False)
+
+    momentum_val_max_abs_value = max(abs(df['Momentum Value'].min()), abs(df['Momentum Value'].max()))
+    momentum_score_max_abs_value = max(abs(df['Momentum Score'].min()), abs(df['Momentum Score'].max()))
 
     cm = LinearSegmentedColormap.from_list("custom_red_green", ["red", "white", "green"], N=len(df))
 
     styled = (df.style
-        .bar(subset='momentum_val', cmap=cm, align=0, vmax=momentum_val_max_abs_value, vmin=-momentum_val_max_abs_value)
-        .bar(subset='momentum_score', cmap=cm, align=0, vmax=momentum_score_max_abs_value, vmin=-momentum_score_max_abs_value)
+        .bar(subset='Momentum Value', cmap=cm, align=0, vmin=-momentum_val_max_abs_value, vmax=momentum_val_max_abs_value)
+        .bar(subset='Momentum Score', cmap=cm, align=0, vmin=-momentum_score_max_abs_value, vmax=momentum_score_max_abs_value)
         .set_table_styles([
         {'selector': 'th.col0',
          'props': [('border-left', '1px solid black')]},
@@ -76,8 +93,10 @@ def style_universe_with_bars(df: pd.DataFrame, name: str) -> str:
         }
     ])
     .format({
-        'momentum_val': "{:.2f}%",
-        'momentum_score': "{:.2f}"
+        'Momentum Value': "{:.2f}%",
+        'Momentum Score': "{:.2f}",
+        'Market Cap (Mio.)': "{:,.2f} $" if 'S&P' in name else "{:,.2f} €",
+        'Weight': "{:.2f}%",
     }))
 
     output_path = f'images/dezil_momentum_score_{name}.png'

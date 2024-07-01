@@ -5,3 +5,4 @@ openpyxl
 dataframe_image
 selenium
 seaborn
+source_engine @ git+ssh://git@github.com/Donner-Reuschel-Luxemburg-S-A/source-engine.git@1.17.1
