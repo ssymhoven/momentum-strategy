@@ -15,6 +15,3 @@ if __name__ == '__main__':
     first_dezil_sxxp_df = get_first_dezil(sxxp, 'momentum_score')
     style_universe_with_bars(first_dezil_sxxp_df, "STOXX Europe 600")
 
-    first_dezil_dax_df = get_first_dezil(dax, 'momentum_score')
-    style_universe_with_bars(first_dezil_dax_df, "DAX Index")
-
