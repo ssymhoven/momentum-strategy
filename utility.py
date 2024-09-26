@@ -5,24 +5,6 @@ from matplotlib.colors import LinearSegmentedColormap
 import dataframe_image as dfi
 
 
-def calculate_momentum_score(z):
-    if z > 0:
-        return 1 + z
-    elif z < 0:
-        return 1 / (1 - z)
-    else:
-        return 1
-
-
-def get_first_dezil(df, column):
-    first_dezil = df[column].quantile(0.9)
-    first_dezil_df = df[df[column] >= first_dezil]
-
-    first_dezil_df['weighted_cap'] = first_dezil_df['#mkt_cap'] * first_dezil_df['momentum_score']
-    first_dezil_df['weight'] = first_dezil_df['weighted_cap'] / first_dezil_df['weighted_cap'].sum() * 100
-
-    return first_dezil_df
-
 
 def get_universe_data(universe: str) -> pd.DataFrame:
     df = pd.read_excel('universe.xlsx', sheet_name=universe, header=0, index_col=0)
@@ -47,6 +29,15 @@ def get_universe_data(universe: str) -> pd.DataFrame:
     df['momentum_score'] = df['z_score'].apply(calculate_momentum_score)
 
     return df
+
+
+def calculate_momentum_score(z):
+    if z > 0:
+        return 1 + z
+    elif z < 0:
+        return 1 / (1 - z)
+    else:
+        return 1
 
 
 def style_universe_with_bars(df: pd.DataFrame, name: str) -> str:
