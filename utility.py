@@ -5,7 +5,6 @@ from matplotlib.colors import LinearSegmentedColormap
 import dataframe_image as dfi
 
 
-
 def get_universe_data(universe: str) -> pd.DataFrame:
     df = pd.read_excel('universe.xlsx', sheet_name=universe, header=0, index_col=0)
     df['momentum_val'] = df.apply(
