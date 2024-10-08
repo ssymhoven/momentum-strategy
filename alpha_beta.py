@@ -41,6 +41,9 @@ def get_stocks():
 
 
 def get_data():
+    premium_select_aktien = pd.read_excel("beta.xlsx", sheet_name="Premium Select", header=0, index_col=0)
+    premium_select_aktien = premium_select_aktien[premium_select_aktien["Premium Select Aktien"] != 0] * 100
+
     benchmark_prices = pd.read_excel("beta.xlsx", sheet_name="Benchmark", header=0, index_col=0)
     benchmark_prices['SXXEWR_change'] = benchmark_prices['SXXEWR Index'].dropna().pct_change().dropna()
     benchmark_prices['SPXEWNTR_change'] = benchmark_prices['SPXEWNTR Index'].dropna().pct_change().dropna()
@@ -69,6 +72,8 @@ def get_data():
 
     stock_prices = stock_prices.dropna(how='all')
 
+    stock_prices = stock_prices.merge(premium_select_aktien, how="left", left_index=True, right_index=True)
+
     risk_free_rates = pd.read_excel("beta.xlsx", sheet_name="Risk Free Rates", header=0, index_col=0)
 
     return stock_prices, benchmark_prices, risk_free_rates
@@ -84,8 +89,6 @@ def calculate_alpha_beta(stock_returns, benchmark_returns):
 
     reg = LinearRegression().fit(X, y)
 
-    print(len(clean_stock_returns))
-
     beta = reg.coef_[0]
     alpha = reg.intercept_ * 250
 
@@ -93,8 +96,9 @@ def calculate_alpha_beta(stock_returns, benchmark_returns):
 
 
 def plot_alpha_beta(stocks):
-    dropped_row = stocks.loc[stocks.index == 'DRAKTIV GR Equity']
-    stocks = stocks.drop(index='DRAKTIV GR Equity', errors='ignore')
+    dr_aktien = stocks.loc[stocks.index == 'DRAKTIV GR Equity']
+    premium_select = stocks.loc[stocks.index == 'Premium Select Aktien']
+    stocks = stocks.drop(index=['DRAKTIV GR Equity', 'Premium Select Aktien'], errors='ignore')
 
     fig = plt.figure(figsize=(12, 8))
     gs = gridspec.GridSpec(3, 3)
@@ -104,9 +108,13 @@ def plot_alpha_beta(stocks):
     ax_yDist = plt.subplot(gs[1:3, 2], sharey=ax_main)
 
     ax_main.scatter(stocks['Beta'], stocks['Alpha'], s=stocks['percent_nav'] * 100, alpha=0.6)
-    ax_main.scatter(dropped_row['Beta'], dropped_row['Alpha'], s=300, color='red', label='Portfolio (DRAKTIV GR Equity)',
+    ax_main.scatter(dr_aktien['Beta'], dr_aktien['Alpha'], s=300, color='red', label='D&R Aktien',
                     edgecolor='red', alpha=0.6)
-    ax_main.text(dropped_row['Beta'], dropped_row['Alpha'], "D&R Aktien", fontsize=9, ha='right')
+    ax_main.scatter(premium_select['Beta'], premium_select['Alpha'], s=300, color='green', label='Premium Select',
+                    edgecolor='green', alpha=0.6)
+
+    ax_main.text(dr_aktien['Beta'], dr_aktien['Alpha'], "D&R Aktien", fontsize=9, ha='right')
+    ax_main.text(premium_select['Beta'], premium_select['Alpha'], "Premium Select", fontsize=9, ha='right')
 
     ax_main.set(xlabel="Beta", ylabel="Alpha")
 
@@ -116,8 +124,8 @@ def plot_alpha_beta(stocks):
     sns.kdeplot(stocks['Alpha'], ax=ax_yDist, fill=True, vertical=True)
     ax_yDist.set(xlabel='Density')
 
-    for i, stock_name in enumerate(stocks.index):
-        ax_main.text(stocks['Beta'][i], stocks['Alpha'][i], stock_name, fontsize=9, ha='right')
+    #for i, stock_name in enumerate(stocks.index):
+    #    ax_main.text(stocks['Beta'][i], stocks['Alpha'][i], stock_name, fontsize=9, ha='right')
 
     # Add weighted beta and total percent_nav as text annotations
     weighted_beta = (stocks['Beta'] / 100 * stocks['percent_nav']).sum()
@@ -126,24 +134,30 @@ def plot_alpha_beta(stocks):
                  verticalalignment='top')
     ax_main.text(0.05, 0.90, f'Weighted Beta: {weighted_beta:.2f}', transform=ax_main.transAxes, fontsize=10,
                  verticalalignment='top')
-    ax_main.text(0.05, 0.85, f'Portfolio Beta: {dropped_row["Beta"][0]:.2f}', transform=ax_main.transAxes, fontsize=10,
+
+    ax_main.text(0.05, 0.10, f'D&R Aktien Beta: {dr_aktien["Beta"][0]:.2f}', transform=ax_main.transAxes, fontsize=10,
                  verticalalignment='top')
-    ax_main.text(0.05, 0.80, f'Portfolio Alpha annualized: {dropped_row["Alpha"][0]:.2f}%', transform=ax_main.transAxes, fontsize=10,
+    ax_main.text(0.05, 0.05, f'D&R Aktien (p.a): {dr_aktien["Alpha"][0]:.2f}%', transform=ax_main.transAxes, fontsize=10,
                  verticalalignment='top')
 
-    # Add gridlines and central reference lines
+    ax_main.text(0.65, 0.10, f'Premium Select Beta: {premium_select["Beta"][0]:.2f}', transform=ax_main.transAxes, fontsize=10,
+                 verticalalignment='top')
+    ax_main.text(0.65, 0.05, f'Premium Select (p.a): {premium_select["Alpha"][0]:.2f}%', transform=ax_main.transAxes,
+                 fontsize=10,
+                 verticalalignment='top')
+
+
     ax_main.axhline(0, linestyle="--", color="black")
     ax_main.axvline(1, linestyle="--", color="black")
 
-    # Adjust layout to prevent overlap
     plt.tight_layout()
 
-    # Show plot
-    plt.savefig("images/alpha_vs_beta_4y.png")
+    plt.savefig("images/alpha_vs_beta.png")
 
 
 if __name__ == '__main__':
     stocks = get_stocks()
+
     stock_prices, benchmark_prices, risk_free_rates = get_data()
 
     for stock in stock_prices.columns:
