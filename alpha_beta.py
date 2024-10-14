@@ -4,6 +4,7 @@ from source_engine.opus_source import OpusSource
 from sklearn.linear_model import LinearRegression
 import matplotlib.gridspec as gridspec
 import seaborn as sns
+from datetime import timedelta
 
 
 def get_stocks():
@@ -41,9 +42,9 @@ def get_stocks():
 
 
 def get_data():
-    benchmark_prices = pd.read_excel("beta.xlsx", sheet_name="Benchmark", header=0, index_col=0)
-    benchmark_prices['SXXEWR_change'] = benchmark_prices['SXXEWR Index'].dropna().pct_change().dropna()
-    benchmark_prices['SPXEWNTR_change'] = benchmark_prices['SPXEWNTR Index'].dropna().pct_change().dropna()
+    benchmark_prices = pd.read_excel("beta.xlsx", sheet_name="Benchmark", header=0, index_col=0, parse_dates=True)
+    benchmark_prices['SXXEWR_change'] = benchmark_prices['SXXP Index'].dropna().pct_change().dropna()
+    benchmark_prices['SPXEWNTR_change'] = benchmark_prices['SPX Index'].dropna().pct_change().dropna()
 
     def weighted_combination(row):
         if pd.isna(row['SXXEWR_change']) and pd.isna(row['SPXEWNTR_change']):
@@ -58,7 +59,7 @@ def get_data():
     benchmark_prices['Benchmark'] = benchmark_prices.apply(weighted_combination, axis=1)
     benchmark_prices = benchmark_prices.dropna(subset=['Benchmark'])
 
-    stock_prices = pd.read_excel("beta.xlsx", sheet_name="Stocks", header=0, index_col=0)
+    stock_prices = pd.read_excel("beta.xlsx", sheet_name="Stocks", header=0, index_col=0, parse_dates=True)
 
     for stock in stock_prices.columns:
         stock_data = stock_prices[stock].dropna()
@@ -69,7 +70,7 @@ def get_data():
 
     stock_prices = stock_prices.dropna(how='all')
 
-    risk_free_rates = pd.read_excel("beta.xlsx", sheet_name="Risk Free Rates", header=0, index_col=0)
+    risk_free_rates = pd.read_excel("beta.xlsx", sheet_name="Risk Free Rates", header=0, index_col=0, parse_dates=True)
 
     return stock_prices, benchmark_prices, risk_free_rates
 
@@ -90,7 +91,7 @@ def calculate_alpha_beta(stock_returns, benchmark_returns):
     return alpha, beta
 
 
-def plot_alpha_beta(stocks):
+def plot_alpha_beta(stocks, timeframe):
     dr_aktien = stocks.loc[stocks.index == 'DRAKTIV GR Equity']
 
     stocks = stocks.drop(index=['DRAKTIV GR Equity'], errors='ignore')
@@ -116,9 +117,6 @@ def plot_alpha_beta(stocks):
     sns.kdeplot(y=stocks['Alpha'], ax=ax_yDist, fill=True)
     ax_yDist.set(xlabel='Density')
 
-    #for i, stock_name in enumerate(stocks.index):
-    #    ax_main.text(stocks['Beta'][i], stocks['Alpha'][i], stock_name, fontsize=9, ha='right')
-
     weighted_beta = (stocks['Beta'] / 100 * stocks['percent_nav']).sum()
     total_pct_nav = stocks['percent_nav'].sum()
     ax_main.text(0.05, 0.95, f'Total % Equity: {total_pct_nav:.2f}%', transform=ax_main.transAxes, fontsize=10,
@@ -136,7 +134,13 @@ def plot_alpha_beta(stocks):
 
     plt.tight_layout()
 
-    plt.savefig("images/alpha_vs_beta.png")
+    plt.savefig(f"images/alpha_vs_beta_{timeframe}_market_weight.png")
+
+
+def filter_data_by_timeframe(df, years):
+    end_date = df.index.max()
+    start_date = end_date - timedelta(days=years * 365)
+    return df.loc[start_date:end_date]
 
 
 def plot_sector_correlation(stocks_df, stock_prices_df):
@@ -144,15 +148,15 @@ def plot_sector_correlation(stocks_df, stock_prices_df):
 
     for sector in sectors:
         sector_stocks = stocks_df[stocks_df['gics_industry_sector'] == sector].index
-        sector_stock_prices = stock_prices_df[sector_stocks]
 
+        sector_stock_prices = stock_prices_df[sector_stocks]
         correlation_matrix = sector_stock_prices.corr()
 
         plt.figure(figsize=(10, 10))
         sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', vmin=-1, vmax=1)
         plt.title(f'Correlation Matrix - {sector}')
         plt.tight_layout()
-        plt.savefig(f"images/sector_correlation_{sector}.png")
+        plt.savefig(f'images/sector_correlation_{sector}.png')
 
 
 if __name__ == '__main__':
@@ -160,12 +164,19 @@ if __name__ == '__main__':
 
     stock_prices, benchmark_prices, risk_free_rates = get_data()
 
-    for stock in stock_prices.columns:
-        if stock == "DRAKTIV GR Equity":
-            stock_prices[stock] = stock_prices[stock].shift(-1)
-
-        alpha, beta = calculate_alpha_beta(stock_prices[stock], benchmark_prices['Benchmark'])
-        stocks.loc[stock, ["Alpha", "Beta"]] = [alpha, beta]
-
-    plot_alpha_beta(stocks)
     plot_sector_correlation(stocks, stock_prices)
+
+    timeframes = {'1y': 1, '2y': 2, '3y': 3, '4y': 4}
+
+    for label, years in timeframes.items():
+        stock_prices_filtered = filter_data_by_timeframe(stock_prices, years)
+        benchmark_prices_filtered = filter_data_by_timeframe(benchmark_prices, years)
+
+        for stock in stock_prices_filtered.columns:
+            if stock == "DRAKTIV GR Equity":
+                stock_prices_filtered[stock] = stock_prices_filtered[stock].shift(-1)
+
+            alpha, beta = calculate_alpha_beta(stock_prices_filtered[stock], benchmark_prices_filtered['Benchmark'])
+            stocks.loc[stock, ["Alpha", "Beta"]] = [alpha, beta]
+
+        plot_alpha_beta(stocks, label)
