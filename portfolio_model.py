@@ -173,3 +173,6 @@ if __name__ == '__main__':
 
     us_universe = get_universe_data(universe="US Underlying")
     eu_universe = get_universe_data(universe="EU Underlying")
+
+    us_universe.to_excel("us_universe.xlsx")
+    eu_universe.to_excel("eu_universe.xlsx")
